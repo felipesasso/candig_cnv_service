@@ -2,7 +2,7 @@
 Auth module for service
 """
 
-from datetime import datetime
+import time
 
 import flask
 import requests
@@ -87,22 +87,24 @@ class Access_Handler:
             return [False, "Decode"]
         return [False, "Level"]
 
-    def get_level(self, username, dataset, time):
+    def get_level(self, username, dataset, exp):
         try:
             user = self.alist[username]
-            # Check expiration if user exists
-            if user["time"] > datetime.now():
-                print("Expired")
-                quit()
-
-            level = user[dataset]
+            level = user["authz"][dataset]
+            if user["exp"] < time.time():
+                new_authz = {}
+                for d in user["authz"].keys():
+                    access = get_access_from_authz(dataset)
+                    new_authz[d] = access[d]
+                self.alist[username] = {"authz": new_authz, "exp": exp}
+                level = self.alist[username]["authz"][dataset]
 
             return level
 
         except KeyError:
             # No info on user or dataset
             access = get_access_from_authz(dataset)
-            self.alist[username] = {"authz": access, "time": time, "valid": True}
+            self.alist[username] = {"authz": access, "exp": exp}
             return access[dataset]
 
 
