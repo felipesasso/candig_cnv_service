@@ -58,7 +58,9 @@ def get_access_from_authz(dataset):
         "dataset": dataset
     }
 
-    url = "http://0.0.0.0:8885/authz/access"
+    authz = flask.current_app.config["candig_services"]["authz"]
+
+    url = "http://{}/authz/access".format(authz)
     headers = flask.request.headers
     request_handle = requests.Session()
     resp = request_handle.get(
