@@ -203,6 +203,8 @@ def get_samples(dataset_id, tags=None, description=None):
         return err, 500
 
     response = {}
+    d0 = [orm.dump(p0) for p0 in q0]
+    response["name"] = d0[0]["name"]
     dump = [orm.dump(p) for p in q]
     for d in dump:
         response["dataset_id"] = d["dataset_id"]
@@ -220,6 +222,7 @@ def get_samples(dataset_id, tags=None, description=None):
                     samples_dict["tags"] = d["tags"]
                 samples_dict["created"] = d["created"]
                 samples_dict["description"] = d["description"]
+                samples_dict["access_level"] = d["access_level"]
                 samples.append(samples_dict)
                 response["samples"] = samples
             elif authorized[1] == "Decode":
@@ -230,6 +233,7 @@ def get_samples(dataset_id, tags=None, description=None):
                 samples_dict["tags"] = d["tags"]
             samples_dict["created"] = d["created"]
             samples_dict["description"] = d["description"]
+            samples_dict["access_level"] = d["access_level"]
             samples.append(samples_dict)
             response["samples"] = samples
 
