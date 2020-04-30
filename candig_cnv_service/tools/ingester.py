@@ -4,7 +4,10 @@ The ingester module provides methods to ingest entire CNV files
 
 import os
 import sys
+import json
+import datetime
 
+import requests
 from sqlalchemy.exc import IntegrityError
 
 sys.path.append(os.getcwd())
@@ -13,10 +16,10 @@ from candig_cnv_service.api.exceptions import FileTypeError  # noqa: E402
 from candig_cnv_service.api.exceptions import KeyExistenceError  # noqa: E402
 from candig_cnv_service.api.exceptions import HeaderError  # noqa: E402
 from candig_cnv_service.orm import init_db, get_engine  # noqa: E402
-from candig_cnv_service.orm.models import CNV  # noqa: E402
+from candig_cnv_service.orm.models import CNV, Sample, Dataset  # noqa: E402
+from candig_cnv_service import orm
 
-
-class Ingester:
+class Ingester_CNV:
     """
     This is a collection of methods to facilitate ingesting entire CNV files
 
@@ -167,3 +170,121 @@ class Ingester:
                     )
                 except IntegrityError as IE:
                     print(IE.args, IE.params)
+
+
+class Ingester:
+    """
+    This is a collection of methods to facilitate ingesting data files
+    to add Datasets or Samples to the CNV service.
+
+    :param database: Location of the database to ingest the data file
+    :type database: str
+    :param datafile: Location of the data file to ingest
+    :type datafile: str
+    :param dss: Address of local CanDIG Datasets Service
+    :type dss: str
+
+    """
+
+    def __init__(self, database, datafile, dss):
+        """Constructor method
+        """
+        self.db = "sqlite:///" + database
+        self.df = datafile
+        self.dss = dss
+        self.data = []
+
+    def read_data(self, mode):
+        with open(self.df) as ds:
+            data = json.load(ds)
+            self.data.extend(data[mode])
+
+
+
+    def verify_datasets(self):
+
+        dataset_ids = self.data
+        url = "http://{}/v2/datasets/verify".format(self.dss)
+        args = {"datasets": dataset_ids}
+        request_handle = requests.Session()
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            "content-type": "application/json",
+            "federation": "false",
+            "Authorization": "Bearer " + "iZTFhLTRiZDItODdk"
+            }
+
+        try:
+            resp = request_handle.post("{}".format(url), headers=headers, json=args)
+            verified = resp.json()
+
+            if len(verified) != len(dataset_ids):
+                print(
+                    "Not able to verify all datasets.\n"
+                    "Verfied and Adding: {}".format(verified)
+                )
+
+            verified_datasets = []
+            for v in verified:
+                for dataset in dataset_ids:
+                    if dataset["dataset_id"] == v:
+                        verified_datasets.append(dataset)
+            
+            return verified_datasets
+        except requests.exceptions.ConnectionError:
+            print(
+                "Cannot establish connection to local Dataset service at "
+                "{}.\nMake sure it is operational and try again.".
+                format(url)
+            )
+            quit()
+        except json.JSONDecodeError:
+            print(resp.status_code, resp.text)
+
+    def add_samples(self):
+        orm.init_db(self.db)
+        session = orm.get_session()
+        try:
+            session.bulk_save_objects(
+                [
+                    Sample(
+                        dataset_id=sample["dataset_id"],
+                        sample_id=sample["sample_id"],
+                        access_level=sample["access_level"],
+                        description=sample["description"],
+                        created=datetime.datetime.utcnow()
+                    )
+                    for sample in self.data
+                ],
+            )
+            session.commit()
+        except IntegrityError as IE:
+            print(IE.args, IE.params)
+
+    def add_datasets(self, datasets):
+        orm.init_db(self.db)
+        session = orm.get_session()
+        try:
+            session.bulk_save_objects(
+                [
+                    Dataset(
+                        dataset_id=dataset["dataset_id"],
+                        name=dataset["name"],
+                    )
+                    for dataset in datasets
+                ],
+            )
+            session.commit()
+        except IntegrityError as IE:
+            print(IE.args, IE.params)
+
+
+    def dataset_protocol(self):
+        self.read_data("datasets")
+        v = self.verify_datasets()
+        self.add_datasets(v)
+
+    def sample_protocol(self):
+        self.read_data("samples")
+        self.add_samples()
