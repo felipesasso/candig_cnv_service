@@ -60,7 +60,7 @@ def get_access_from_authz(dataset):
 
     authz = flask.current_app.config["candig_services"]["authz"]
 
-    url = "http://{}/authz/access".format(authz)
+    url = "http://{}/authz".format(authz)
     headers = flask.request.headers
     request_handle = requests.Session()
     resp = request_handle.get(
@@ -70,7 +70,7 @@ def get_access_from_authz(dataset):
         timeout=5
         )
 
-    return resp
+    return resp.json()
 
 
 class Access_Handler:
